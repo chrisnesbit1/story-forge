@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Story Forge</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Story Forge</h1>
+    <section class="card">
+      <h2>Start Adventure</h2>
+      <form id="start-form">
+        <label>Age Group
+          <select id="age-group" required>
+            <option>5-7</option><option selected>8-10</option><option>Teen</option><option>Adult</option>
+          </select>
+        </label>
+        <label>Theme
+          <select id="theme" required>
+            <option>Mario</option><option>Bible</option><option selected>Fantasy</option><option>SciFi</option>
+          </select>
+        </label>
+        <label>Duration
+          <select id="duration" required>
+            <option>5m</option><option selected>15m</option><option>30m</option>
+          </select>
+        </label>
+        <label>Difficulty
+          <select id="difficulty" required>
+            <option>easy</option><option selected>normal</option><option>hard</option>
+          </select>
+        </label>
+        <button type="submit">Begin</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Resume Adventure</h2>
+      <ul id="adventure-list"></ul>
+    </section>
+  </main>
+  <script src="storage.js"></script>
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
