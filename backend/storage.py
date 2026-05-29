@@ -34,6 +34,28 @@ def _write_json(key: str, data: dict):
         print(f"[storage.py] S3 write failed for {key}: {e}")
         raise
 
+
+def write_binary(key: str, data: bytes, content_type: str):
+    try:
+        s3.put_object(Bucket=_bucket(), Key=key, Body=data, ContentType=content_type)
+    except Exception as e:
+        print(f"[storage.py] S3 binary write failed for {key}: {e}")
+        raise
+
+
+def presigned_url(key: str, expires_in: int = 3600):
+    if not key:
+        return ""
+    try:
+        return s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": _bucket(), "Key": key},
+            ExpiresIn=expires_in,
+        )
+    except Exception as e:
+        print(f"[storage.py] S3 presigned URL failed for {key}: {e}")
+        return ""
+
 def load_metadata(session_id: str):
     return _read_json(f"sessions/{session_id}/metadata.json")
 

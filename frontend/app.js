@@ -32,7 +32,7 @@
       difficulty: document.getElementById('difficulty').value
     };
     const data = await apiRequest('/start-adventure', 'POST', body);
-    upsertAdventure({ gameId: data.gameId, title: data.title, updatedAt: new Date().toISOString(), completed: false });
+    upsertAdventure({ gameId: data.gameId, title: data.title, updatedAt: data.updatedAt || new Date().toISOString(), completed: false });
     window.location.href = `game.html?gameId=${encodeURIComponent(data.gameId)}`;
   });
 })();

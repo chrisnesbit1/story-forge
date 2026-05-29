@@ -6,10 +6,19 @@
 
   const storyEl = document.getElementById('story');
   const choicesEl = document.getElementById('choices');
+  let adventureVersion = null;
 
   const render = (data) => {
+    adventureVersion = data.adventureVersion ?? adventureVersion;
+    const sceneImage = document.getElementById('scene-image');
     document.getElementById('scene-title').textContent = data.scene.title;
-    document.getElementById('scene-image').src = data.scene.imageUrl || '';
+    if (data.scene.imageUrl) {
+      sceneImage.src = data.scene.imageUrl;
+      sceneImage.hidden = false;
+    } else {
+      sceneImage.removeAttribute('src');
+      sceneImage.hidden = true;
+    }
     storyEl.textContent = data.story;
     document.getElementById('hp').textContent = `HP: ${data.playerState.hp}/${data.playerState.maxHp || 100}`;
     document.getElementById('gold').textContent = `Gold: ${data.playerState.gold}`;
@@ -22,9 +31,24 @@
   };
 
   async function nextTurn(action) {
-    const data = await apiRequest('/next-turn', 'POST', { sessionId, gameId, playerAction: action });
-    upsertAdventure({ gameId, title: data.title || 'Adventure', updatedAt: new Date().toISOString(), completed: data.completed });
-    render(data);
+    try {
+      const data = await apiRequest('/next-turn', 'POST', {
+        sessionId,
+        gameId,
+        playerAction: action,
+        expectedAdventureVersion: adventureVersion
+      });
+      upsertAdventure({ gameId, title: data.title || 'Adventure', updatedAt: data.updatedAt || new Date().toISOString(), completed: data.completed });
+      render(data);
+    } catch (err) {
+      if (err.code === 'VERSION_CONFLICT' && err.data) {
+        upsertAdventure({ gameId, title: err.data.title || 'Adventure', updatedAt: err.data.updatedAt || new Date().toISOString(), completed: err.data.completed });
+        render(err.data);
+        alert('This adventure changed in another tab. The latest saved state has been loaded; please choose your next action again.');
+        return;
+      }
+      throw err;
+    }
   }
 
   document.getElementById('freeform-form').addEventListener('submit', async (e) => {
