@@ -6,13 +6,13 @@ DURATIONS = {"5m", "15m", "30m"}
 
 
 def sanitize_action(action: str) -> str:
-    if not action or len(action.strip()) < 1 or len(action) > 300:
+    if not action or len(action.strip()) < 1:
         raise ValueError("Invalid playerAction length")
     if re.search(r"<\s*script|</|<[^>]+>", action, re.IGNORECASE):
         raise ValueError("HTML/script content is not allowed")
     if re.search(r"(.)\1{14,}", action):
         raise ValueError("Excessive repeated characters")
-    return action.strip()
+    return action.strip()[:300]
 
 
 def validate_start(payload: dict) -> None:

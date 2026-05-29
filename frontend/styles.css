@@ -4,7 +4,10 @@ body { font-family: Arial, sans-serif; margin: 0; background: #10131c; color: #f
 label { display: block; margin-bottom: .75rem; }
 select, input, button { width: 100%; padding: .6rem; margin-top: .25rem; border-radius: 8px; border: none; }
 button { background: #4d88ff; color: white; cursor: pointer; }
+button:disabled, input:disabled { cursor: wait; opacity: .65; }
 .game-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; }
 #scene-image { width: 100%; max-height: 340px; object-fit: cover; border-radius: 10px; background: #2a3244; }
 .choices { display: grid; gap: .5rem; margin: 1rem 0; }
+.turn-status { color: #b9c6ff; font-weight: 700; margin: 1rem 0 0; }
+.toast { background: #5d1f2a; border: 1px solid #ff8a9d; border-radius: 8px; color: #fff; margin: 1rem 0; padding: .75rem; }
 @media (max-width: 768px) { .game-layout { grid-template-columns: 1fr; } }

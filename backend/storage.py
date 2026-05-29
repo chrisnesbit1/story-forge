@@ -1,20 +1,25 @@
 import json
 import os
+from typing import Any
+
 import boto3
 from botocore.exceptions import ClientError
 
-s3 = boto3.client('s3')
+s3: Any = boto3.client('s3')
 
-def _must_env(var):
+
+def _must_env(var: str) -> str:
     v = os.environ.get(var)
     if not v:
         raise RuntimeError(f"Required environment variable '{var}' is not set")
     return v
 
-def _bucket():
+
+def _bucket() -> str:
     return _must_env('S3_BUCKET_NAME')
 
-def _read_json(key: str):
+
+def _read_json(key: str) -> dict[str, Any] | None:
     try:
         obj = s3.get_object(Bucket=_bucket(), Key=key)
         return json.loads(obj['Body'].read().decode())
@@ -27,7 +32,8 @@ def _read_json(key: str):
         print(f"[storage.py] Network or unknown error during read {key}: {e}")
         return None
 
-def _write_json(key: str, data: dict):
+
+def _write_json(key: str, data: dict[str, Any]) -> None:
     try:
         s3.put_object(Bucket=_bucket(), Key=key, Body=json.dumps(data).encode(), ContentType='application/json')
     except Exception as e:
@@ -35,7 +41,7 @@ def _write_json(key: str, data: dict):
         raise
 
 
-def write_binary(key: str, data: bytes, content_type: str):
+def write_binary(key: str, data: bytes, content_type: str) -> None:
     try:
         s3.put_object(Bucket=_bucket(), Key=key, Body=data, ContentType=content_type)
     except Exception as e:
@@ -43,7 +49,7 @@ def write_binary(key: str, data: bytes, content_type: str):
         raise
 
 
-def presigned_url(key: str, expires_in: int = 3600):
+def presigned_url(key: str | None, expires_in: int = 3600) -> str:
     if not key:
         return ""
     try:
@@ -56,14 +62,18 @@ def presigned_url(key: str, expires_in: int = 3600):
         print(f"[storage.py] S3 presigned URL failed for {key}: {e}")
         return ""
 
-def load_metadata(session_id: str):
+
+def load_metadata(session_id: str) -> dict[str, Any] | None:
     return _read_json(f"sessions/{session_id}/metadata.json")
 
-def save_metadata(session_id: str, data: dict):
+
+def save_metadata(session_id: str, data: dict[str, Any]) -> None:
     _write_json(f"sessions/{session_id}/metadata.json", data)
 
-def load_adventure(session_id: str, game_id: str):
+
+def load_adventure(session_id: str, game_id: str) -> dict[str, Any] | None:
     return _read_json(f"sessions/{session_id}/adventures/{game_id}.json")
 
-def save_adventure(session_id: str, game_id: str, data: dict):
+
+def save_adventure(session_id: str, game_id: str, data: dict[str, Any]) -> None:
     _write_json(f"sessions/{session_id}/adventures/{game_id}.json", data)

@@ -1,0 +1,216 @@
+openapi: 3.0.3
+info:
+  title: Story Forge API
+  version: 1.0.0
+paths:
+  /create-session:
+    post:
+      summary: Create a new player session.
+      responses:
+        "200":
+          description: Session created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateSessionResponse"
+  /start-adventure:
+    post:
+      summary: Start a new adventure for a session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartAdventureRequest"
+      responses:
+        "200":
+          description: Adventure created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+  /next-turn:
+    post:
+      summary: Advance an existing adventure by one player action.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NextTurnRequest"
+      responses:
+        "200":
+          description: Turn resolved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: Adventure version conflict. The latest adventure payload is returned in data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureResponse"
+  /load-adventure:
+    get:
+      summary: Load the latest saved adventure state.
+      parameters:
+        - in: query
+          name: sessionId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: gameId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Adventure loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureResponse"
+        "404":
+          $ref: "#/components/responses/Error"
+components:
+  responses:
+    Error:
+      description: API error envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    Envelope:
+      type: object
+      required: [success, error, data]
+      properties:
+        success:
+          type: boolean
+        error:
+          nullable: true
+        data:
+          nullable: true
+    CreateSessionResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+    StartAdventureRequest:
+      type: object
+      required: [sessionId, theme, ageGroup, duration]
+      properties:
+        sessionId:
+          type: string
+        theme:
+          type: string
+          enum: [Mario, Bible, Fantasy, SciFi]
+        ageGroup:
+          type: string
+          enum: ["5-7", "8-10", Teen, Adult]
+        duration:
+          type: string
+          enum: [5m, 15m, 30m]
+        difficulty:
+          type: string
+          default: normal
+    NextTurnRequest:
+      type: object
+      required: [sessionId, gameId, playerAction]
+      properties:
+        sessionId:
+          type: string
+        gameId:
+          type: string
+        playerAction:
+          type: string
+          maxLength: 300
+        expectedAdventureVersion:
+          type: integer
+    AdventureResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Adventure"
+    Adventure:
+      type: object
+      required: [gameId, adventureVersion, title, story, choices, playerState, objective, scene, completed, updatedAt]
+      properties:
+        gameId:
+          type: string
+        adventureVersion:
+          type: integer
+        title:
+          type: string
+        story:
+          type: string
+        choices:
+          type: array
+          items:
+            type: string
+        playerState:
+          type: object
+          required: [hp, maxHp, gold, inventory]
+          properties:
+            hp:
+              type: integer
+            maxHp:
+              type: integer
+            gold:
+              type: integer
+            inventory:
+              type: array
+              items:
+                type: string
+        objective:
+          type: object
+          required: [title]
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+        scene:
+          type: object
+          required: [title, imageUrl]
+          properties:
+            title:
+              type: string
+            imageUrl:
+              type: string
+        completed:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            success:
+              enum: [false]
+            error:
+              type: object
+              required: [code, message]
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
