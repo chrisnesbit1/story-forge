@@ -15,6 +15,8 @@ AI-powered narrative RPG with static frontend and serverless Python backend.
 - `POST /next-turn`
 - `GET /load-adventure`
 
+See `docs/api-contract.yaml` for request and response schemas, including the standard success/error envelope used by every route.
+
 ## State synchronization
 
 The backend is the source of truth for `playerState`, including inventory, HP, and gold. The frontend renders the latest state returned by `start-adventure`, `next-turn`, and `load-adventure`.
@@ -47,3 +49,28 @@ Set Lambda environment variables:
 - `RATE_LIMIT_PER_MINUTE` (optional; `0` disables rate limiting)
 
 For static frontend deployments that use `STORY_FORGE_API_KEY`, expose the matching key as `window.STORY_FORGE_API_KEY` before loading `frontend/api.js`.
+
+## Deployment
+
+Install and configure the AWS SAM CLI with credentials for the target AWS account, then deploy from the repository root:
+
+```sh
+cd infrastructure
+sam build
+sam deploy --guided \
+  --parameter-overrides \
+  GeminiApiKey=<your-gemini-api-key> \
+  StoryForgeApiKey=<optional-shared-api-key> \
+  RateLimitPerMinute=0 \
+  GeminiImageModel=gemini-2.5-flash-image
+```
+
+On later deploys, reuse the generated `samconfig.toml`:
+
+```sh
+cd infrastructure
+sam build
+sam deploy
+```
+
+Required Lambda environment variables are wired by `infrastructure/template.yaml`: `S3_BUCKET_NAME`, `IMAGE_BUCKET_NAME`, `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL`, `STORY_FORGE_API_KEY`, and `RATE_LIMIT_PER_MINUTE`. `S3_BUCKET_NAME` and `GEMINI_API_KEY` are validated at Lambda cold start; missing values fail startup with a clear log entry.

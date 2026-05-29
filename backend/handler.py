@@ -1,31 +1,40 @@
 import json
+import logging
 import os
 import time
 import uuid
+from typing import Any
 from urllib.parse import parse_qs
 from models import now_iso, new_game_id, DURATION_TURNS
 from validation import validate_start, sanitize_action
 from prompts import system_prompt
-from ai import generate_turn, generate_image
+from ai import generate_turn, generate_image, validate_gemini_response
 from storage import load_metadata, save_metadata, load_adventure, save_adventure, write_binary, presigned_url
 from game_engine import apply_state
 from image_logic import should_generate_image, image_prompt
 
-# Fail fast if any environment variable is missing at cold start (surfaced clearly in logs)
+logger = logging.getLogger(__name__)
+
 REQUIRED_ENV_VARS = ["S3_BUCKET_NAME", "GEMINI_API_KEY"]
-for var in REQUIRED_ENV_VARS:
-    if not os.environ.get(var):
-        print(f"[handler.py] Environment variable {var} is missing")
+
+
+def validate_environment() -> None:
+    missing = [var for var in REQUIRED_ENV_VARS if not os.environ.get(var)]
+    if missing:
+        raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
+
+validate_environment()
 
 _RATE_LIMIT_WINDOW_SECONDS = 60
-_rate_limit_hits = {}
+_rate_limit_hits: dict[str, list[float]] = {}
 
 
-def ok(data):
+def ok(data: dict[str, Any]) -> dict[str, Any]:
     return {"statusCode": 200, "headers": _headers(), "body": json.dumps({"success": True, "error": None, "data": data})}
 
 
-def fail(code, message, status=400, data=None):
+def fail(code: str, message: str, status: int = 400, data: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "statusCode": status,
         "headers": _headers(),
@@ -33,7 +42,7 @@ def fail(code, message, status=400, data=None):
     }
 
 
-def _headers():
+def _headers() -> dict[str, str]:
     return {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
@@ -41,7 +50,7 @@ def _headers():
     }
 
 
-def _request_header(event, name):
+def _request_header(event: dict[str, Any], name: str) -> str | None:
     headers = event.get('headers') or {}
     lname = name.lower()
     for key, value in headers.items():
@@ -50,7 +59,7 @@ def _request_header(event, name):
     return None
 
 
-def _authorized(event):
+def _authorized(event: dict[str, Any]) -> bool:
     expected = os.environ.get('STORY_FORGE_API_KEY')
     if not expected:
         return True
@@ -61,14 +70,14 @@ def _authorized(event):
     return supplied == expected
 
 
-def _client_id(event):
+def _client_id(event: dict[str, Any]) -> str:
     request_context = event.get('requestContext') or {}
     http = request_context.get('http') or {}
     identity = request_context.get('identity') or {}
     return http.get('sourceIp') or identity.get('sourceIp') or _request_header(event, 'x-forwarded-for') or 'unknown'
 
 
-def _rate_limited(event):
+def _rate_limited(event: dict[str, Any]) -> bool:
     limit = int(os.environ.get('RATE_LIMIT_PER_MINUTE') or 0)
     if limit <= 0:
         return False
@@ -84,7 +93,7 @@ def _rate_limited(event):
     return False
 
 
-def _image_extension(mime_type):
+def _image_extension(mime_type: str) -> str:
     return {
         "image/jpeg": "jpg",
         "image/png": "png",
@@ -92,11 +101,11 @@ def _image_extension(mime_type):
     }.get(mime_type, "png")
 
 
-def _scene_image_url(adv):
+def _scene_image_url(adv: dict[str, Any]) -> str:
     return presigned_url((adv.get("currentScene") or {}).get("imageKey"))
 
 
-def _maybe_update_scene_image(adv, ai_data, scene_title):
+def _maybe_update_scene_image(adv: dict[str, Any], ai_data: dict[str, Any], scene_title: str) -> None:
     adv["currentScene"] = adv.get("currentScene") or {}
     adv["currentScene"]["sceneTitle"] = scene_title
     if not should_generate_image(adv, ai_data):
@@ -111,10 +120,10 @@ def _maybe_update_scene_image(adv, ai_data, scene_title):
         write_binary(key, generated["bytes"], mime_type)
         adv["currentScene"]["imageKey"] = key
     except Exception as e:
-        print(f"[handler.py] Scene image storage failed: {e}")
+        logger.exception("Scene image storage failed: %s", e)
 
 
-def _adventure_payload(adv, story, choices, scene_title=None):
+def _adventure_payload(adv: dict[str, Any], story: str, choices: list[str], scene_title: str | None = None) -> dict[str, Any]:
     current_scene = adv.get('currentScene') or {}
     return {
         "gameId": adv['gameId'],
@@ -133,7 +142,7 @@ def _adventure_payload(adv, story, choices, scene_title=None):
     }
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     method = event.get('requestContext', {}).get('http', {}).get('method') or event.get('httpMethod')
     path = event.get('rawPath') or event.get('path', '')
     if method == 'OPTIONS':
@@ -158,23 +167,24 @@ def lambda_handler(event, context):
     except ValueError as e:
         return fail('INVALID_REQUEST', str(e), 400)
     except Exception:
+        logger.exception("Unhandled API error")
         return fail('INTERNAL_ERROR', 'Unexpected server error', 500)
 
 
-def create_session():
+def create_session() -> dict[str, Any]:
     sid = str(uuid.uuid4())
     ts = now_iso()
     save_metadata(sid, {"sessionId": sid, "createdAt": ts, "updatedAt": ts, "adventures": []})
     return ok({"sessionId": sid})
 
 
-def start_adventure(payload):
+def start_adventure(payload: dict[str, Any]) -> dict[str, Any]:
     validate_start(payload)
     sid = payload['sessionId']
     gid = new_game_id()
     ts = now_iso()
     max_turns = DURATION_TURNS[payload['duration']]
-    ai_data = generate_turn(system_prompt())
+    ai_data = validate_gemini_response(generate_turn(system_prompt()))
     adv = {
         "gameId": gid, "sessionId": sid, "title": ai_data.get('title', f"{payload['theme']} Adventure"), "theme": payload['theme'],
         "ageGroup": payload['ageGroup'], "duration": payload['duration'], "difficulty": payload.get('difficulty', 'normal'),
@@ -193,7 +203,7 @@ def start_adventure(payload):
     return ok(_adventure_payload(adv, ai_data['story'], ai_data['choices'], "Opening"))
 
 
-def next_turn(payload):
+def next_turn(payload: dict[str, Any]) -> dict[str, Any]:
     sid, gid = payload.get('sessionId'), payload.get('gameId')
     action = sanitize_action(payload.get('playerAction', ''))
     adv = load_adventure(sid, gid)
@@ -212,7 +222,7 @@ def next_turn(payload):
         )
         return fail('VERSION_CONFLICT', 'Adventure changed in another tab. Reloaded the latest state.', 409, latest)
 
-    ai_data = generate_turn(f"{system_prompt()}\nAction: {action}\nState: {json.dumps(adv)}")
+    ai_data = validate_gemini_response(generate_turn(f"{system_prompt()}\nAction: {action}\nState: {json.dumps(adv)}"))
     apply_state(adv, ai_data)
     ts = now_iso()
     adv['updatedAt'] = ts
@@ -226,7 +236,7 @@ def next_turn(payload):
     return ok(_adventure_payload(adv, ai_data['story'], ai_data['choices'], scene_title))
 
 
-def load(session_id, game_id):
+def load(session_id: str, game_id: str) -> dict[str, Any]:
     adv = load_adventure(session_id, game_id)
     if not adv:
         return fail('NOT_FOUND', 'Adventure not found', 404)

@@ -6,7 +6,32 @@
 
   const storyEl = document.getElementById('story');
   const choicesEl = document.getElementById('choices');
+  const formEl = document.getElementById('freeform-form');
+  const inputEl = document.getElementById('freeform-action');
+  const turnStatusEl = document.getElementById('turn-status');
+  const errorToastEl = document.getElementById('error-toast');
   let adventureVersion = null;
+  let isLoading = false;
+
+  const showError = (message) => {
+    errorToastEl.textContent = message;
+    errorToastEl.hidden = false;
+  };
+
+  const clearError = () => {
+    errorToastEl.textContent = '';
+    errorToastEl.hidden = true;
+  };
+
+  const setLoading = (loading) => {
+    isLoading = loading;
+    turnStatusEl.hidden = !loading;
+    inputEl.disabled = loading;
+    formEl.querySelector('button').disabled = loading;
+    choicesEl.querySelectorAll('button').forEach(button => {
+      button.disabled = loading;
+    });
+  };
 
   const render = (data) => {
     adventureVersion = data.adventureVersion ?? adventureVersion;
@@ -23,14 +48,23 @@
     document.getElementById('hp').textContent = `HP: ${data.playerState.hp}/${data.playerState.maxHp || 100}`;
     document.getElementById('gold').textContent = `Gold: ${data.playerState.gold}`;
     document.getElementById('objective').textContent = `Objective: ${data.objective?.title || ''}`;
-    document.getElementById('inventory').innerHTML = (data.playerState.inventory || []).map(i => `<li>${i}</li>`).join('');
+    const inventoryEl = document.getElementById('inventory');
+    inventoryEl.innerHTML = '';
+    (data.playerState.inventory || []).forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      inventoryEl.appendChild(li);
+    });
     choicesEl.innerHTML = '';
     data.choices.forEach(c => {
-      const b = document.createElement('button'); b.textContent = c; b.onclick = () => nextTurn(c); choicesEl.appendChild(b);
+      const b = document.createElement('button'); b.textContent = c; b.disabled = isLoading; b.onclick = () => nextTurn(c); choicesEl.appendChild(b);
     });
   };
 
   async function nextTurn(action) {
+    if (isLoading) return;
+    clearError();
+    setLoading(true);
     try {
       const data = await apiRequest('/next-turn', 'POST', {
         sessionId,
@@ -44,18 +78,22 @@
       if (err.code === 'VERSION_CONFLICT' && err.data) {
         upsertAdventure({ gameId, title: err.data.title || 'Adventure', updatedAt: err.data.updatedAt || new Date().toISOString(), completed: err.data.completed });
         render(err.data);
-        alert('This adventure changed in another tab. The latest saved state has been loaded; please choose your next action again.');
+        showError('This adventure changed in another tab. The latest saved state has been loaded; please choose your next action again.');
         return;
       }
-      throw err;
+      showError(err.message || 'Unable to resolve that turn. Please try again.');
+    } finally {
+      setLoading(false);
     }
   }
 
-  document.getElementById('freeform-form').addEventListener('submit', async (e) => {
+  formEl.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const input = document.getElementById('freeform-action');
-    await nextTurn(input.value.trim());
-    input.value = '';
+    const action = inputEl.value.trim();
+    if (!action) return;
+    await nextTurn(action);
+    if (!errorToastEl.hidden) return;
+    inputEl.value = '';
   });
 
   const loaded = await apiRequest(`/load-adventure?sessionId=${encodeURIComponent(sessionId)}&gameId=${encodeURIComponent(gameId)}`);

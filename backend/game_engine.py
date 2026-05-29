@@ -1,7 +1,9 @@
-from models import DURATION_TURNS, phase_for
+from typing import Any
+
+from models import phase_for
 
 
-def apply_state(adventure: dict, ai_data: dict) -> None:
+def apply_state(adventure: dict[str, Any], ai_data: dict[str, Any]) -> None:
     changes = ai_data.get("playerStateChanges", {})
     st = adventure["playerState"]
     st["hp"] = max(0, min(st["maxHp"], st["hp"] + int(changes.get("hp", 0))))
