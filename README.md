@@ -15,6 +15,23 @@ AI-powered narrative RPG with static frontend and serverless Python backend.
 - `POST /next-turn`
 - `GET /load-adventure`
 
+## State synchronization
+
+The backend is the source of truth for `playerState`, including inventory, HP, and gold. The frontend renders the latest state returned by `start-adventure`, `next-turn`, and `load-adventure`.
+
+Each adventure includes an `adventureVersion` that starts at `1` and increments after every successful `next-turn` mutation. The frontend sends `expectedAdventureVersion` with each turn. If another tab has already advanced the adventure, the backend returns `409 VERSION_CONFLICT` with the latest adventure payload. The frontend renders that latest saved state and asks the player to choose an action again instead of applying an optimistic inventory update.
+
+## Image generation status
+
+Scene image generation is not implemented yet. `backend/image_logic.py` keeps the intended image-worthy turn cadence as a TODO, while API responses continue to return empty `scene.imageUrl` values until an image-rendering and storage pipeline is added.
+
+## Production controls
+
+The API can run open for local demos, but production deployments should enable the optional shared API key and/or rate limit:
+
+- `STORY_FORGE_API_KEY`: when set, requests must include the value as `X-Api-Key` or `Authorization: Bearer <key>`.
+- `RATE_LIMIT_PER_MINUTE`: when greater than `0`, the Lambda applies a best-effort per-client in-memory request limit for each warm execution environment.
+
 ## Local notes
 
 Set Lambda environment variables:
@@ -23,3 +40,7 @@ Set Lambda environment variables:
 - `S3_BUCKET_NAME`
 - `IMAGE_BUCKET_NAME`
 - `ENVIRONMENT`
+- `STORY_FORGE_API_KEY` (optional)
+- `RATE_LIMIT_PER_MINUTE` (optional; `0` disables rate limiting)
+
+For static frontend deployments that use `STORY_FORGE_API_KEY`, expose the matching key as `window.STORY_FORGE_API_KEY` before loading `frontend/api.js`.

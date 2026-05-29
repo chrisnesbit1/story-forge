@@ -1,6 +1,21 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Story Forge MVP
+Parameters:
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: API key used by the Gemini story generator.
+  StoryForgeApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Optional shared API key. Leave blank to disable API key checks.
+  RateLimitPerMinute:
+    Type: Number
+    Default: 0
+    Description: Optional per-client in-memory Lambda rate limit. Set 0 to disable.
 Resources:
   StoryForgeApi:
     Type: AWS::Serverless::Api
@@ -8,7 +23,7 @@ Resources:
       StageName: prod
       Cors:
         AllowMethods: "'GET,POST,OPTIONS'"
-        AllowHeaders: "'Content-Type'"
+        AllowHeaders: "'Content-Type,X-Api-Key,Authorization'"
         AllowOrigin: "'*'"
   StoryForgeFunction:
     Type: AWS::Serverless::Function
@@ -32,6 +47,9 @@ Resources:
         Variables:
           S3_BUCKET_NAME: !Ref StoryForgeBucket
           IMAGE_BUCKET_NAME: !Ref StoryForgeBucket
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          STORY_FORGE_API_KEY: !Ref StoryForgeApiKey
+          RATE_LIMIT_PER_MINUTE: !Ref RateLimitPerMinute
   StoryForgeBucket:
     Type: AWS::S3::Bucket
 Outputs:
