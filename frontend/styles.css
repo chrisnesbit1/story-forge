@@ -1,0 +1,10 @@
+body { font-family: Arial, sans-serif; margin: 0; background: #10131c; color: #f5f6fb; }
+.container { max-width: 1000px; margin: auto; padding: 1rem; }
+.card { background: #1a2130; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+label { display: block; margin-bottom: .75rem; }
+select, input, button { width: 100%; padding: .6rem; margin-top: .25rem; border-radius: 8px; border: none; }
+button { background: #4d88ff; color: white; cursor: pointer; }
+.game-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; }
+#scene-image { width: 100%; max-height: 340px; object-fit: cover; border-radius: 10px; background: #2a3244; }
+.choices { display: grid; gap: .5rem; margin: 1rem 0; }
+@media (max-width: 768px) { .game-layout { grid-template-columns: 1fr; } }

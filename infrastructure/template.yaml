@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Story Forge MVP
+Parameters:
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: API key used by the Gemini story generator.
+  StoryForgeApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Optional shared API key. Leave blank to disable API key checks.
+  RateLimitPerMinute:
+    Type: Number
+    Default: 0
+    Description: Optional per-client in-memory Lambda rate limit. Set 0 to disable.
+  GeminiImageModel:
+    Type: String
+    Default: gemini-2.5-flash-image
+    Description: Gemini image generation model used for scene artwork.
+Resources:
+  StoryForgeApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Api-Key,Authorization'"
+        AllowOrigin: "'*'"
+  StoryForgeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.12
+      Handler: handler.lambda_handler
+      CodeUri: ../backend/
+      MemorySize: 512
+      Timeout: 60
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref StoryForgeBucket
+      Events:
+        ProxyApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref StoryForgeApi
+            Path: /{proxy+}
+            Method: ANY
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref StoryForgeBucket
+          IMAGE_BUCKET_NAME: !Ref StoryForgeBucket
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          GEMINI_IMAGE_MODEL: !Ref GeminiImageModel
+          STORY_FORGE_API_KEY: !Ref StoryForgeApiKey
+          RATE_LIMIT_PER_MINUTE: !Ref RateLimitPerMinute
+  StoryForgeBucket:
+    Type: AWS::S3::Bucket
+Outputs:
+  ApiUrl:
+    Value: !Sub "https://${StoryForgeApi}.execute-api.${AWS::Region}.amazonaws.com/prod"

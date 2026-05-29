@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adventure</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container game-layout">
+    <section class="card">
+      <h1 id="scene-title">Adventure</h1>
+      <img id="scene-image" alt="Scene" />
+      <article id="story"></article>
+      <div id="choices" class="choices"></div>
+      <form id="freeform-form">
+        <input id="freeform-action" maxlength="300" placeholder="What do you do?" required />
+        <button type="submit">Act</button>
+      </form>
+    </section>
+    <aside class="card">
+      <h2>Character</h2>
+      <p id="hp"></p>
+      <p id="gold"></p>
+      <p id="objective"></p>
+      <ul id="inventory"></ul>
+    </aside>
+  </main>
+  <script src="storage.js"></script>
+  <script src="api.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
