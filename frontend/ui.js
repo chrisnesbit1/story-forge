@@ -10,8 +10,15 @@
 
   const render = (data) => {
     adventureVersion = data.adventureVersion ?? adventureVersion;
+    const sceneImage = document.getElementById('scene-image');
     document.getElementById('scene-title').textContent = data.scene.title;
-    document.getElementById('scene-image').src = data.scene.imageUrl || '';
+    if (data.scene.imageUrl) {
+      sceneImage.src = data.scene.imageUrl;
+      sceneImage.hidden = false;
+    } else {
+      sceneImage.removeAttribute('src');
+      sceneImage.hidden = true;
+    }
     storyEl.textContent = data.story;
     document.getElementById('hp').textContent = `HP: ${data.playerState.hp}/${data.playerState.maxHp || 100}`;
     document.getElementById('gold').textContent = `Gold: ${data.playerState.gold}`;

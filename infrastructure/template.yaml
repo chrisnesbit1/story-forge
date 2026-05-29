@@ -16,6 +16,10 @@ Parameters:
     Type: Number
     Default: 0
     Description: Optional per-client in-memory Lambda rate limit. Set 0 to disable.
+  GeminiImageModel:
+    Type: String
+    Default: gemini-2.5-flash-image
+    Description: Gemini image generation model used for scene artwork.
 Resources:
   StoryForgeApi:
     Type: AWS::Serverless::Api
@@ -32,7 +36,7 @@ Resources:
       Handler: handler.lambda_handler
       CodeUri: ../backend/
       MemorySize: 512
-      Timeout: 30
+      Timeout: 60
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref StoryForgeBucket
@@ -48,6 +52,7 @@ Resources:
           S3_BUCKET_NAME: !Ref StoryForgeBucket
           IMAGE_BUCKET_NAME: !Ref StoryForgeBucket
           GEMINI_API_KEY: !Ref GeminiApiKey
+          GEMINI_IMAGE_MODEL: !Ref GeminiImageModel
           STORY_FORGE_API_KEY: !Ref StoryForgeApiKey
           RATE_LIMIT_PER_MINUTE: !Ref RateLimitPerMinute
   StoryForgeBucket:

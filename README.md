@@ -21,9 +21,11 @@ The backend is the source of truth for `playerState`, including inventory, HP, a
 
 Each adventure includes an `adventureVersion` that starts at `1` and increments after every successful `next-turn` mutation. The frontend sends `expectedAdventureVersion` with each turn. If another tab has already advanced the adventure, the backend returns `409 VERSION_CONFLICT` with the latest adventure payload. The frontend renders that latest saved state and asks the player to choose an action again instead of applying an optimistic inventory update.
 
-## Image generation status
+## Image generation
 
-Scene image generation is not implemented yet. `backend/image_logic.py` keeps the intended image-worthy turn cadence as a TODO, while API responses continue to return empty `scene.imageUrl` values until an image-rendering and storage pipeline is added.
+Scene image generation is wired into the backend. On the opening scene, early turns, completion, and larger story beats, the Lambda asks Gemini for a 16:9 scene image, stores the returned image bytes in S3, saves the image key in `currentScene`, and returns a short-lived signed `scene.imageUrl` to the frontend. If image generation or storage fails, the turn still succeeds and the frontend hides the image area until a saved image URL is available.
+
+The image cadence lives in `backend/image_logic.py`. The model defaults to `gemini-2.5-flash-image` and can be changed with `GEMINI_IMAGE_MODEL`.
 
 ## Production controls
 
@@ -37,6 +39,7 @@ The API can run open for local demos, but production deployments should enable t
 Set Lambda environment variables:
 
 - `GEMINI_API_KEY`
+- `GEMINI_IMAGE_MODEL` (optional; defaults to `gemini-2.5-flash-image`)
 - `S3_BUCKET_NAME`
 - `IMAGE_BUCKET_NAME`
 - `ENVIRONMENT`

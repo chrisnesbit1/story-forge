@@ -6,9 +6,10 @@ from urllib.parse import parse_qs
 from models import now_iso, new_game_id, DURATION_TURNS
 from validation import validate_start, sanitize_action
 from prompts import system_prompt
-from ai import generate_turn
-from storage import load_metadata, save_metadata, load_adventure, save_adventure
+from ai import generate_turn, generate_image
+from storage import load_metadata, save_metadata, load_adventure, save_adventure, write_binary, presigned_url
 from game_engine import apply_state
+from image_logic import should_generate_image, image_prompt
 
 # Fail fast if any environment variable is missing at cold start (surfaced clearly in logs)
 REQUIRED_ENV_VARS = ["S3_BUCKET_NAME", "GEMINI_API_KEY"]
@@ -83,7 +84,38 @@ def _rate_limited(event):
     return False
 
 
-def _adventure_payload(adv, story, choices, scene_title=None, image_url=""):
+def _image_extension(mime_type):
+    return {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }.get(mime_type, "png")
+
+
+def _scene_image_url(adv):
+    return presigned_url((adv.get("currentScene") or {}).get("imageKey"))
+
+
+def _maybe_update_scene_image(adv, ai_data, scene_title):
+    adv["currentScene"] = adv.get("currentScene") or {}
+    adv["currentScene"]["sceneTitle"] = scene_title
+    if not should_generate_image(adv, ai_data):
+        return
+    generated = generate_image(image_prompt(adv, ai_data))
+    if not generated:
+        return
+    mime_type = generated["mimeType"]
+    turn = adv.get("turnCount", 0)
+    key = f"sessions/{adv['sessionId']}/images/{adv['gameId']}/turn-{turn:03d}.{_image_extension(mime_type)}"
+    try:
+        write_binary(key, generated["bytes"], mime_type)
+        adv["currentScene"]["imageKey"] = key
+    except Exception as e:
+        print(f"[handler.py] Scene image storage failed: {e}")
+
+
+def _adventure_payload(adv, story, choices, scene_title=None):
+    current_scene = adv.get('currentScene') or {}
     return {
         "gameId": adv['gameId'],
         "adventureVersion": adv.get('adventureVersion', 1),
@@ -92,7 +124,10 @@ def _adventure_payload(adv, story, choices, scene_title=None, image_url=""):
         "choices": choices,
         "playerState": adv['playerState'],
         "objective": adv['objective'],
-        "scene": {"title": scene_title or adv.get('phase') or adv.get('currentScene', {}).get('sceneTitle', 'Adventure'), "imageUrl": image_url},
+        "scene": {
+            "title": scene_title or current_scene.get('sceneTitle') or adv.get('phase') or 'Adventure',
+            "imageUrl": _scene_image_url(adv),
+        },
         "completed": adv['completed'],
         "updatedAt": adv['updatedAt'],
     }
@@ -147,8 +182,9 @@ def start_adventure(payload):
         "playerState": {"hp": 100, "maxHp": 100, "gold": 0, "inventory": [], "companions": [], "statusEffects": []},
         "objective": ai_data.get('objectiveUpdate', {"title": "Begin", "description": "Start your quest."}),
         "summary": ai_data.get('summaryUpdate', ''), "recentTurns": [],
-        "currentScene": {"sceneTitle": "Opening", "imageKey": f"images/{gid}/intro.webp"}
+        "currentScene": {"sceneTitle": "Opening"}
     }
+    _maybe_update_scene_image(adv, ai_data, "Opening")
     save_adventure(sid, gid, adv)
     meta = load_metadata(sid) or {"sessionId": sid, "createdAt": ts, "updatedAt": ts, "adventures": []}
     meta['updatedAt'] = ts
@@ -183,9 +219,11 @@ def next_turn(payload):
     adv['adventureVersion'] = current_version + 1
     adv['objective'] = ai_data.get('objectiveUpdate', adv['objective'])
     adv['summary'] = ai_data.get('summaryUpdate', adv['summary'])
+    scene_title = ai_data.get('sceneTitle') or adv['phase']
+    _maybe_update_scene_image(adv, ai_data, scene_title)
     adv['recentTurns'] = (adv.get('recentTurns') + [{"playerAction": action, "storyResult": ai_data['story'], "timestamp": ts}])[-5:]
     save_adventure(sid, gid, adv)
-    return ok(_adventure_payload(adv, ai_data['story'], ai_data['choices'], adv['phase']))
+    return ok(_adventure_payload(adv, ai_data['story'], ai_data['choices'], scene_title))
 
 
 def load(session_id, game_id):

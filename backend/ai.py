@@ -3,6 +3,8 @@ import os
 from urllib import request
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_IMAGE_MODEL = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+GEMINI_IMAGE_URL = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_IMAGE_MODEL}:generateContent"
 
 def _fallback():
     return {
@@ -26,6 +28,43 @@ def _validate_gemini_response(d):
         print("[ai.py] Gemini 'choices' field missing or not a list")
         return False
     return True
+
+
+def generate_image(prompt_text: str):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("GEMINI_API_KEY not set; skipping scene image generation.")
+        return None
+    payload = {
+        "contents": [{"parts": [{"text": prompt_text}]}],
+        "generationConfig": {
+            "responseModalities": ["IMAGE"],
+            "responseFormat": {"image": {"aspectRatio": "16:9"}},
+        },
+    }
+    req = request.Request(
+        GEMINI_IMAGE_URL,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+    )
+    try:
+        with request.urlopen(req, timeout=25) as resp:
+            raw = json.loads(resp.read().decode())
+            parts = raw.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            for part in parts:
+                inline_data = part.get("inlineData") or part.get("inline_data")
+                if inline_data and inline_data.get("data"):
+                    import base64
+
+                    return {
+                        "bytes": base64.b64decode(inline_data["data"]),
+                        "mimeType": inline_data.get("mimeType") or inline_data.get("mime_type") or "image/png",
+                    }
+        print("[generate_image] Gemini response did not include image data.")
+    except Exception as e:
+        print(f"[generate_image] Scene image generation failed: {e}")
+    return None
+
 
 def generate_turn(prompt_text: str) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY")
