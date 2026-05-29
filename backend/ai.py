@@ -16,6 +16,17 @@ def _fallback():
         "completed": False,
     }
 
+def _validate_gemini_response(d):
+    required = ["title", "story", "choices", "playerStateChanges", "objectiveUpdate", "summaryUpdate", "completed"]
+    for field in required:
+        if field not in d:
+            print(f"[ai.py] Gemini response missing required field: {field}")
+            return False
+    if not isinstance(d.get("choices"), list) or len(d["choices"]) < 1:
+        print("[ai.py] Gemini 'choices' field missing or not a list")
+        return False
+    return True
+
 def generate_turn(prompt_text: str) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -28,7 +39,11 @@ def generate_turn(prompt_text: str) -> dict:
             with request.urlopen(req, timeout=15) as resp:
                 raw = json.loads(resp.read().decode())
                 text = raw["candidates"][0]["content"]["parts"][0]["text"]
-                return json.loads(text)
+                parsed = json.loads(text)
+                if _validate_gemini_response(parsed):
+                    return parsed
+                print("[ai.py] Invalid Gemini response, using fallback")
+                return _fallback()
         except Exception as e:
             print(f"[generate_turn] Attempt {idx+1} failed: {e}")
             if idx == 0:

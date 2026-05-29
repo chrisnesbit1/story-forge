@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from urllib.parse import parse_qs
 from models import now_iso, new_game_id, DURATION_TURNS
@@ -8,18 +9,20 @@ from ai import generate_turn
 from storage import load_metadata, save_metadata, load_adventure, save_adventure
 from game_engine import apply_state
 
+# Fail fast if any environment variable is missing at cold start (surfaced clearly in logs)
+REQUIRED_ENV_VARS = ["S3_BUCKET_NAME", "GEMINI_API_KEY"]
+for var in REQUIRED_ENV_VARS:
+    if not os.environ.get(var):
+        print(f"[handler.py] Environment variable {var} is missing")
 
 def ok(data):
     return {"statusCode": 200, "headers": _headers(), "body": json.dumps({"success": True, "error": None, "data": data})}
 
-
 def fail(code, message, status=400):
     return {"statusCode": status, "headers": _headers(), "body": json.dumps({"success": False, "error": {"code": code, "message": message}, "data": None})}
 
-
 def _headers():
     return {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type"}
-
 
 def lambda_handler(event, context):
     method = event.get('requestContext', {}).get('http', {}).get('method') or event.get('httpMethod')
@@ -44,13 +47,11 @@ def lambda_handler(event, context):
     except Exception:
         return fail('INTERNAL_ERROR', 'Unexpected server error', 500)
 
-
 def create_session():
     sid = str(uuid.uuid4())
     ts = now_iso()
     save_metadata(sid, {"sessionId": sid, "createdAt": ts, "updatedAt": ts, "adventures": []})
     return ok({"sessionId": sid})
-
 
 def start_adventure(payload):
     validate_start(payload)
@@ -75,7 +76,6 @@ def start_adventure(payload):
     save_metadata(sid, meta)
     return ok({"gameId": gid, "title": adv['title'], "story": ai_data['story'], "choices": ai_data['choices'], "playerState": adv['playerState'], "scene": {"title": "Opening", "imageUrl": ""}})
 
-
 def next_turn(payload):
     sid, gid = payload.get('sessionId'), payload.get('gameId')
     action = sanitize_action(payload.get('playerAction', ''))
@@ -91,7 +91,6 @@ def next_turn(payload):
     adv['recentTurns'] = (adv.get('recentTurns') + [{"playerAction": action, "storyResult": ai_data['story'], "timestamp": ts}])[-5:]
     save_adventure(sid, gid, adv)
     return ok({"title": adv['title'], "story": ai_data['story'], "choices": ai_data['choices'], "playerState": adv['playerState'], "objective": adv['objective'], "scene": {"title": adv['phase'], "imageUrl": ""}, "completed": adv['completed']})
-
 
 def load(session_id, game_id):
     adv = load_adventure(session_id, game_id)
